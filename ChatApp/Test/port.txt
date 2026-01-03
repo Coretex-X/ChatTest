@@ -1,0 +1,3 @@
+Flet - 8000
+Django - 7000
+REST API - 5000

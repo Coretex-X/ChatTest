@@ -1,0 +1,75 @@
+#///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+class LoginView(APIView):                                                                                           
+    def post(self, request):                                                                                        
+#----------------------------------- Сбор даных ------------------------------------------------------------------------
+        response_login = request.data.get('login')                                                                  
+        response_password = request.data.get('password')
+#-----------------------------------------------------------------------------------------------------------------------
+        '''ip_address = get_client_ip_address(request)
+        if AxesProxyHandler.is_locked(request, credentials={
+            'username': response_login,
+            'ip_address': ip_address,
+        }):
+            return Response(
+                {"error": "Аккаунт временно заблокирован. Попробуйте позже."},
+                status=status.HTTP_403_FORBIDDEN,
+            )'''
+#----------------------------------- Проверка даных на коректность -----------------------------------------------------
+        class Validate(BaseModel):
+            login:str=Field(min_length=3,max_length=40)
+            password:str=Field(min_length=4,max_length=40)
+            model_config=ConfigDict(extra='forbid')
+        #try:
+        Validate(**request.data)
+        '''except ValidationError as e:
+            # Фиксируем неудачную попытку (неправильный формат данных)
+            user_login_failed.send(
+                sender=self.__class__,
+                credentials={'username': response_login},
+                request=request,
+            )
+            raise ValidationError(e.errors())'''
+#----------------------------------- Проверка на существование пользователя --------------------------------------------
+        try:
+            queryset_login =  Models.objects.get(login=response_login)
+        except Models.DoesNotExist:
+            # Фиксируем неудачную попытку (пользователь не найден)
+            ''''user_login_failed.send(
+                sender=self.__class__,
+                credentials={'username': response_login},
+                request=request,
+            )'''
+            raise Http404({
+                'Такова пользователя несуществует',
+                status.HTTP_404_NOT_FOUND
+                           })
+#----------------------------------- Проверка на индетичность пороля ----- Выдача JWT токена ---------------------------
+        if queryset_login.check_password(response_password):
+           # Сбрасываем счетчик неудачных попыток
+            '''AxesProxyHandler.reset_attempts(
+                request=request,
+                credentials={'username': response_login, 'ip_address': ip_address},
+            )'''
+            refresh = RefreshToken.for_user(queryset_login)
+            queryset_login.token = make_password(str(refresh))
+            queryset_login.save()
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'true':'Авторизация прошла успешно',
+                'status':status.HTTP_201_CREATED
+                })
+        else:
+#----------------------------------- Если Пароль не правельный ----------------------------------------------------------
+            '''user_login_failed.send(
+            sender=self.__class__,
+            credentials={'username': response_login},
+            request=request,
+            )'''
+            return Http404({
+                'false':'Неверный пороль',
+                'status':status.HTTP_401_UNAUTHORIZED
+            })
+        
+        return
+#///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
