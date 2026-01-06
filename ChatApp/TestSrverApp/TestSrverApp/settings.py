@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'main.apps.MainConfig', 
     'sign_up.apps.SignUpConfig',
+    'chat.apps.ChatConfig',
     'rest_framework',
     'rest_framework.authtoken',
     'djoser',
