@@ -3,11 +3,7 @@ from rest_framework.generics import *
 from rest_framework.views import *
 from .models import *
 from .serializer import Serializer
-#from rest_framework_simplejwt.tokens import RefreshToken
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-#from django.contrib.auth.signals import user_login_failed  # NEW
-from django.db.models import Q
-# Create your views here.
 
 class RegistrationView(CreateAPIView):
     serializer_class = Serializer
@@ -24,7 +20,7 @@ class RegistrationView(CreateAPIView):
         class Validate(BaseModel):
             login:str = Field(min_length=3,max_length=40)
             email:EmailStr = Field(min_length=3,max_length=50)
-            number:str = Field(min_length=8, max_length=23)
+            number:str = Field(min_length=6, max_length=12)
             password:str = Field(min_length=4,max_length=40)
             model_config=ConfigDict(extra='forbid') 
         Validate(**request.data)
@@ -73,8 +69,9 @@ class LoginView(APIView):
             #queryset_login.token = make_password(str(refresh))
             queryset_login.save()
             return Response({
-                'name': response_login,
-                'meaning':'Авторизация прошла успешно',
+                'id_users':'',
+                'login': response_login,
+                'number':'',
                 'status':status.HTTP_201_CREATED
                 })
         
