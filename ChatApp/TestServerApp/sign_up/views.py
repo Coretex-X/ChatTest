@@ -13,23 +13,33 @@ class RegistrationView(CreateAPIView):
     serializer_class = Serializer
 
     def post(self, request):
+
+        #получаем данные пользовтеля
         response_login = request.data.get('login')
         response_email = request.data.get('email')
+        response_number = request.data.get('number')
         response_password = request.data.get('password')
 
+        #Валидация (проверка) данных
         class Validate(BaseModel):
             login:str = Field(min_length=3,max_length=40)
             email:EmailStr = Field(min_length=3,max_length=50)
+            number:str = Field(min_length=8, max_length=23)
             password:str = Field(min_length=4,max_length=40)
             model_config=ConfigDict(extra='forbid') 
         Validate(**request.data)
 
-        response_password = make_password(response_password)
+        #Хеширование поролей
+        response_password_hash = make_password(response_password)
+        
+        #Запись данных в БД
         Models.objects.create(
             login=response_login, 
-            email=response_email, 
-            password=response_password
-            )   
+            email=response_email,
+            number=response_number, 
+            password=response_password_hash
+            )
+           
         return Response({"post":200})
         
         
