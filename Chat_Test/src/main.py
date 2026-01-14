@@ -7,12 +7,11 @@ from app.settings import settings_view
 from app.registration import main_registartion
 from app.sign_up import main_sign_up
 
-with ql.connect("/home/username/Test/Test_Chat/ChatTest/Chat_Test/src/data/user_data.db") as con:
+with ql.connect("/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/user_data.db") as con:
     cur = con.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users_data(
-        access_token TEXT NOT NULL,
-        refresh_token TEXT NOT NULL,
+        id_user TEXT,
         name TEXT,
         profile TEXT,
         PRIMARY KEY (access_token)

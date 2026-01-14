@@ -46,7 +46,7 @@ def main_menu(page):
     user_profil = 'None'
     
     # Пути к базам данных
-    db_path = "/home/username/Test/Test_Chat/ChatTest/Chat_Test/src/data/user_data.db"
+    db_path = "/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/user_data.db"
     
     # Инициализация базы данных
     init_database(db_path)

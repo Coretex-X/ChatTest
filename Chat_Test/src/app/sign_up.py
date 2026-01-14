@@ -54,26 +54,24 @@ def main_sign_up(page: ft.Page):
                 if response.status_code == 200:
                     json_response = response.json()
                     # Извлекаем токены
-                    access_token = json_response["access"]
-                    refresh_token = json_response["refresh"]
+                    id_user = json_response["id_users"]
                     name = json_response["name"]
                     message = json_response["meaning"]
-                    with ql.connect("/home/archlinux05/Chat_Test/src/data/user_data.db") as con:
+                    with ql.connect("/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/user_data.db") as con:
                         cur = con.cursor()
                         cur.execute("""
                             CREATE TABLE IF NOT EXISTS users_data(
-                            access_token TEXT NOT NULL,
-                            refresh_token TEXT NOT NULL,
+                            id_user TEXT,                            
                             name TEXT,
                             profile TEXT,
                             PRIMARY KEY (access_token)
                             );
                         """)
-                        cur.execute(f"INSERT INTO users_data (access_token, refresh_token, name) VALUES ('{access_token}', '{refresh_token}', '{name}')")
+                        cur.execute(f"INSERT INTO users_data (access_token, name) VALUES ('{id_user}', '{name}')")
 
                         data['is_authenticated'] = True
 
-                        with open('/home/archlinux05/Chat_Test/src/config/config.jsonc', 'w') as f:
+                        with open('/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/config.jsonc', 'w') as f:
                             js.dump(data, f, indent=4)  # indent для красивого форматирования
 
                         print(message)
