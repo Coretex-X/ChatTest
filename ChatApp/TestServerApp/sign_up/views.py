@@ -77,3 +77,17 @@ class LoginView(APIView):
             'meaning': 'Неверные учетные данные',
             'status': status.HTTP_401_UNAUTHORIZED
         })
+    
+class UserStatusAPI(APIView):
+    def post(self, request):
+        online = 'online'
+        offline = 'offline'
+        action = request.data.get('action')
+        
+        if action == online:
+            Models.objects.create(status=online)
+            return Response({"status": status.HTTP_200_OK})
+        
+        elif action == offline:
+            Models.objects.create(status=offline)
+            return Response({"status": status.HTTP_404_NOT_FOUND})

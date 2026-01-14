@@ -7,6 +7,7 @@ class Models(models.Model):
     login = models.CharField(max_length=225, verbose_name='Логин пользователя', unique=True)
     email = models.EmailField(verbose_name='E-Mail пользователя', unique=True)
     number = models.TextField()
+    status = models.TextField()
     password = models.TextField()
 
     class Meta:

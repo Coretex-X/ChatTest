@@ -1,12 +1,13 @@
 import flet as ft
 import json as js
 import sqlite3 as ql
+import requests as rq
 from app.menu import main_menu
 from app.settings import settings_view
 from app.registration import main_registartion
 from app.sign_up import main_sign_up
 
-with ql.connect("/home/username/Test/Test_Chat/Chat_Test/src/data/user_data.db") as con:
+with ql.connect("/home/username/Test/Test_Chat/ChatTest/Chat_Test/src/data/user_data.db") as con:
     cur = con.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users_data(
@@ -18,6 +19,8 @@ with ql.connect("/home/username/Test/Test_Chat/Chat_Test/src/data/user_data.db")
         );
         """)
     cur.close()
+
+rq.post("http://localhost:5000/api/v2/user/sesion/", json={"action": 'online'})
 
 def main(page: ft.Page):
     def route_change(route):
