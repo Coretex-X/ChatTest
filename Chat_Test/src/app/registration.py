@@ -52,6 +52,7 @@ def main_registartion(page: ft.Page):
         data = {
             'login': text_input_login.value,
             'email': text_input_email.value,
+            'number':text_input_number,
             'password': text_input_password.value
         }
 
@@ -59,7 +60,7 @@ def main_registartion(page: ft.Page):
             # Отправка на сервер
             async with hx.AsyncClient() as client:
                 response = await client.post(
-                    'http://127.0.0.1:7600/api/v1/user/registration/',
+                    'http://127.0.0.1:5000/api/v2/user/registration/',
                     json=data
                 )
                 
@@ -92,6 +93,9 @@ def main_registartion(page: ft.Page):
     text_input_email = ft.TextField(
         label='E-Mail'
     )
+
+    text_input_number = ft.TextField(
+        label='Телефон')
     
     text_input_password = ft.TextField(
         label='Пароль',
@@ -121,6 +125,7 @@ def main_registartion(page: ft.Page):
     required_fields = [
         text_input_login,
         text_input_email,
+        text_input_number,
         text_input_password,
         text_input_password_clon
     ]
@@ -135,6 +140,7 @@ def main_registartion(page: ft.Page):
                         ft.Container(label, margin=5),
                         ft.Container(text_input_login, margin=5),
                         ft.Container(text_input_email, margin=5),
+                        ft.Container(text_input_number, margin=5),
                         ft.Container(text_input_password, margin=5),
                         ft.Container(text_input_password_clon, margin=5),
                         ft.Container(error_text, margin=5),

@@ -17,13 +17,14 @@ class RegistrationView(APIView):
         response_password = request.data.get('password')
 
         #Валидация (проверка) данных
+        '''
         class Validate(BaseModel):
             login:str = Field(min_length=3,max_length=40)
             email:EmailStr = Field(min_length=3,max_length=50)
             number:str = Field(min_length=6, max_length=12)
             password:str = Field(min_length=4,max_length=40)
             model_config=ConfigDict(extra='forbid') 
-        Validate(**request.data)
+        Validate(**request.data)'''
 
         #Хеширование поролей
         response_password_hash = make_password(response_password)

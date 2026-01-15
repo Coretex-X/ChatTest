@@ -1,12 +1,13 @@
 import flet as ft
 import sqlite3 as sql
 import json as js
+import path
 
-
+db_path = f"{path.db_path()}user_data.db"
 
 def settings_view(page):
 
-    with sql.connect("/home/username/Test/Test_Chat/Chat_Test/src/data/user_data.db") as con:
+    with sql.connect(db_path) as con:
         cur = con.cursor()
         try:
             cur.execute("SELECT name, profile FROM users_data")

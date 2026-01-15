@@ -2,8 +2,10 @@ import flet as ft
 import httpx as hx
 import sqlite3 as ql
 import json as js
+import path
 
-
+db_path = f"{path.db_path()}user_data.db" 
+json_path = f"{path.db_path}config/config.jsonc"
 
 def main_sign_up(page: ft.Page):
     page.title = "Авторизацыя"
@@ -47,7 +49,7 @@ def main_sign_up(page: ft.Page):
             # Отправка на сервер
             async with hx.AsyncClient() as client:
                 response = await client.post(
-                    'http://127.0.0.1:7600/api/v1/user/login/',
+                    'http://127.0.0.1:5000/api/v2/user/login/',
                     json=data
                 )
                 
@@ -57,7 +59,7 @@ def main_sign_up(page: ft.Page):
                     id_user = json_response["id_users"]
                     name = json_response["name"]
                     message = json_response["meaning"]
-                    with ql.connect("/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/user_data.db") as con:
+                    with ql.connect(db_path) as con:
                         cur = con.cursor()
                         cur.execute("""
                             CREATE TABLE IF NOT EXISTS users_data(
@@ -71,7 +73,7 @@ def main_sign_up(page: ft.Page):
 
                         data['is_authenticated'] = True
 
-                        with open('/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/config.jsonc', 'w') as f:
+                        with open(json_path, 'w') as f:
                             js.dump(data, f, indent=4)  # indent для красивого форматирования
 
                         print(message)
@@ -148,4 +150,4 @@ def main_sign_up(page: ft.Page):
     ],
     # appbar=appbar,  # раскомментируйте если нужно
     # navigation_bar=navigation_bar  # раскомментируйте если нужно
-)
+    )

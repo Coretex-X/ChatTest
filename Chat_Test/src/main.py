@@ -6,8 +6,11 @@ from app.menu import main_menu
 from app.settings import settings_view
 from app.registration import main_registartion
 from app.sign_up import main_sign_up
+import path
 
-with ql.connect("/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/user_data.db") as con:
+db_path = f'{path.db_path()}user_data.db'
+
+with ql.connect(db_path) as con:
     cur = con.cursor()
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users_data(

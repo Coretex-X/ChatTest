@@ -36,6 +36,7 @@
 ##############################################################################
 
 import flet as ft
+import path 
 from .components.database import init_database, load_contacts, load_chats, create_new_chat, get_user_data, delete_chat_from_db
 from .components.ui_components import create_contact_item, create_chat_item, on_hover_chat
 from .components.dialogs import create_exit_dialog, create_delete_chat_dialog, create_contact_dialog
@@ -46,7 +47,7 @@ def main_menu(page):
     user_profil = 'None'
     
     # Пути к базам данных
-    db_path = "/home/archlinux05/Home/Test/ChatTest/Chat_Test/src/data/user_data.db"
+    db_path = f"{path.db_path()}user_data.db"
     
     # Инициализация базы данных
     init_database(db_path)
