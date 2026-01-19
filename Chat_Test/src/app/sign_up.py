@@ -45,15 +45,15 @@ def main_sign_up(page: ft.Page):
             'password': text_input_password.value
         }
 
-        try:
+        #try:
             # Отправка на сервер
-            async with hx.AsyncClient() as client:
+        async with hx.AsyncClient() as client:
                 response = await client.post(
                     'http://127.0.0.1:5000/api/v2/user/login/',
                     json=data
                 )
                 
-                if response.status_code == 200:
+        if response.status_code == 200:
                     json_response = response.json()
                     # Извлекаем токены
                     id_user = json_response["id_users"]
@@ -84,15 +84,15 @@ def main_sign_up(page: ft.Page):
                         page.go('/')
                         page.update()
                     cur.close()
-                else:
+        else:
                     error_text.value = f"Error:{response}"
                     error_text.visible = True
                     error_text.update()
                     
-        except Exception as ex:
-            error_text.value = f"Ошибка соединения: {str(ex)}"
-            error_text.visible = True
-            error_text.update()
+        #except Exception as ex:
+         #   error_text.value = f"Ошибка соединения: {str(ex)}"
+         #   error_text.visible = True
+          #  error_text.update()
 
     # Элементы интерфейса
     label = ft.Text('Авторизация:', size=30)

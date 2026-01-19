@@ -17,14 +17,13 @@ class RegistrationView(APIView):
         response_password = request.data.get('password')
 
         #Валидация (проверка) данных
-        '''
         class Validate(BaseModel):
             login:str = Field(min_length=3,max_length=40)
             email:EmailStr = Field(min_length=3,max_length=50)
             number:str = Field(min_length=6, max_length=12)
             password:str = Field(min_length=4,max_length=40)
             model_config=ConfigDict(extra='forbid') 
-        Validate(**request.data)'''
+        Validate(**request.data)
 
         #Хеширование поролей
         response_password_hash = make_password(response_password)
@@ -84,11 +83,12 @@ class UserStatusAPI(APIView):
         online = 'online'
         offline = 'offline'
         action = request.data.get('action')
+        id_users = request.data.get('id_users')
         
         if action == online:
-            Models.objects.create(status=online)
+            Models.objects.filter(pk=id_users).update(status=action)
             return Response({"status": status.HTTP_200_OK})
         
         elif action == offline:
-            Models.objects.create(status=offline)
+            Models.objects.filter(pk=id_users).update(status=action)
             return Response({"status": status.HTTP_404_NOT_FOUND})
