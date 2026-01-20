@@ -29,5 +29,9 @@ response_sesion = rq.post("http://127.0.0.1:5000/api/v2/user/sesion/", json=sesi
 
 ws = websocket.WebSocket()
 ws.connect("ws://127.0.0.1:5000/ws/chat/lobby/")
-ws.send(json.dumps({"message": "Hello"}))
-print(ws.recv())  # {"message": "Hello"}
+message = ""
+close_while = "EXIT!"
+while close_while != message:
+    message = str(input(": "))
+    ws.send(json.dumps({"message": message}))
+    print(ws.recv())  # {"message": "Hello"}
