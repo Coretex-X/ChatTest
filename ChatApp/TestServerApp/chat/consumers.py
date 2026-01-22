@@ -1,40 +1,46 @@
+from channels.generic.websocket import AsyncWebsocketConsumer
+from asgiref.sync import async_to_sync
 import json
 
-from asgiref.sync import async_to_sync
-from channels.generic.websocket import WebsocketConsumer
+#Сообщение для себя
+class YourConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        # Принимаем соединение
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        pass
+
+    async def receive(self, text_data):
+        # Получаем и отправляем обратно (эхо)
+        try:
+            data = json.loads(text_data)
+            message = data["message"]
+            
+            # Просто возвращаем сообщение обратно
+            await self.send(text_data=json.dumps({
+                "message": message,
+            }))
+
+            
+        except json.JSONDecodeError:
+            await self.send(text_data=json.dumps({
+                "error": "Невалидный JSON"
+            }))
+        except KeyError:
+            await self.send(text_data=json.dumps({
+                "error": "Нет поля 'message' в JSON"
+            }))
 
 
-class ChatConsumer(WebsocketConsumer):
-    def connect(self):
-        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
-        self.room_group_name = f"chat_{self.room_name}"
+#Для личных чатов пользователей (не мене 2 участников)
+class PrivateChatConsumer(AsyncWebsocketConsumer):
+    pass
 
-        # Join room group
-        async_to_sync(self.channel_layer.group_add)(
-            self.room_group_name, self.channel_name
-        )
+#Для групавых чатов
+class GroupChatConsumer(AsyncWebsocketConsumer):
+    pass
 
-        self.accept()
-
-    def disconnect(self, close_code):
-        # Leave room group
-        async_to_sync(self.channel_layer.group_discard)(
-           self.room_group_name, self.channel_name
-        )
-
-    # Receive message from WebSocket
-    def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        message = text_data_json["message"]
-
-        # Send message to room group
-        async_to_sync(self.channel_layer.group_send)(
-            self.room_group_name, {"type": "chat.message", "message": message}
-        )
-
-    # Receive message from room group
-    def chat_message(self, event):
-        message = event["message"]
-
-        # Send message to WebSocket
-        self.send(text_data=json.dumps({"message": message}))
+#Для уведомлений 
+class NotificationConsumer(AsyncWebsocketConsumer):
+    pass
