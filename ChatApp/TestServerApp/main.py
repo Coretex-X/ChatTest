@@ -1,6 +1,7 @@
 import requests as rq
 import websocket
 import json
+import time as t
 
 '''json_reqistartion = {
     "login":"User5",
@@ -26,9 +27,23 @@ sesion = {
 }
 response_sesion = rq.post("http://127.0.0.1:5000/api/v2/user/sesion/", json=sesion)'''
 
+'''rq.post("http://127.0.0.1:5000/chat/v2/user/get_user_data/", json={
+    "user_room": "lobby",
+    "user_id": 123
+})'''
 
 ws = websocket.WebSocket()
-ws.connect("ws://127.0.0.1:5000/ws/groop_user/lable1/")
+
+ws.connect("ws://127.0.0.1:5000/ws/my_chat/")
+ws.send(json.dumps({
+    "room":None,
+    "user_id":None,
+    "token":None
+}))
+
+t.sleep(2)
+
+ws.connect("ws://127.0.0.1:5000/ws/chat_user/api87/")
 while True:
     message = str(input(": "))
     ws.send(json.dumps({"message": message}))
