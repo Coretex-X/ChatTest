@@ -34,11 +34,11 @@ response_sesion = rq.post("http://127.0.0.1:5000/api/v2/user/sesion/", json=sesi
 
 ws = websocket.WebSocket()
 
-ws.connect("ws://127.0.0.1:5000/ws/my_chat/")
+ws.connect("ws://127.0.0.1:5000/ws/data/")
 ws.send(json.dumps({
-    "room":None,
-    "user_id":None,
-    "token":None
+    "room":"lobbi",
+    "user_id":12345,
+    "token":"api87"
 }))
 
 t.sleep(2)
