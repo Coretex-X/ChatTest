@@ -1,7 +1,6 @@
 import requests as rq
 import websocket
 import json
-import time as t
 
 '''json_reqistartion = {
     "login":"User5",
@@ -32,19 +31,35 @@ response_sesion = rq.post("http://127.0.0.1:5000/api/v2/user/sesion/", json=sesi
     "user_id": 123
 })'''
 
-ws = websocket.WebSocket()
+'''ws = websocket.WebSocket()
 
 ws.connect("ws://127.0.0.1:5000/ws/data/")
 ws.send(json.dumps({
-    "room":"lobbi",
-    "user_id":12345,
+    "room":"lobbi_7",
+    "user_id":9,
+    "guest_id":10,
+    "status_chat":"existing_chat",
     "token":"api87"
-}))
-
-t.sleep(2)
-
+})) #existing
 ws.connect("ws://127.0.0.1:5000/ws/chat_user/api87/")
 while True:
     message = str(input(": "))
     ws.send(json.dumps({"message": message}))
-    print(ws.recv())  # {"message": "Hello"}
+    print(ws.recv())  # {"message": "Hello"}'''
+
+import redis
+
+# Подключение к Redis (по умолчанию localhost:6379)
+r = redis.Redis(
+    host='localhost',
+    port=6379,
+    db=0,  # номер базы (0-15)
+    decode_responses=True  # автоматически декодировать bytes в str
+)
+
+# Проверка подключения
+try:
+    r.ping()
+    print("Успешно подключено к Redis!")
+except redis.ConnectionError:
+    print("Ошибка подключения к Redis")
