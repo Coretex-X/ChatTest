@@ -9,6 +9,7 @@ class Models(models.Model):
     number = models.TextField()
     status = models.TextField()
     password = models.TextField()
+    token = models.TextField(unique=True)
 
     def check_password(self, raw_password):
         return check_password(raw_password, self.password)

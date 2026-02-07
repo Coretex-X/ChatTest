@@ -3,6 +3,7 @@ from rest_framework.generics import *
 from rest_framework.views import *
 from rest_framework.exceptions import AuthenticationFailed
 from .models import *
+from .geniration_token import GuaranteedUniqueTokenGenerator
 from .serializer import Serializer
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
@@ -65,10 +66,15 @@ class LoginView(APIView):
         #проверка пороли
         if queryset_login.check_password(response_password):
            #Если всё верно возврощаем данные пользователя
+            geniration = GuaranteedUniqueTokenGenerator()
+            token = geniration.generate_token(100)
+            queryset_login.token = str(token)
+            queryset_login.save()
             return Response({
                 'id_users':queryset_login.id,
                 'login': response_login,
                 'number':queryset_login.number,
+                'token':token,
                 'status':status.HTTP_200_OK
                 })
         
