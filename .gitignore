@@ -1,0 +1,9 @@
+__pycache__/
+
+ChatApp/TestServerApp/chat/__pycache__/
+ChatApp/TestServerApp/sign_up/__pycache__/
+ChatApp/TestServerApp/TestServerApp/__pycache__/
+
+Chat_Test/src/__pycache__/
+Chat_Test/src/app/__pycache__/
+Chat_Test/src/app/components/__pycache__/
