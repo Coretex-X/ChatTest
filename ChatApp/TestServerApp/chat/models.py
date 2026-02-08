@@ -25,14 +25,20 @@ class UserData(models.Model):
 
 
 # 3. СООБЩЕНИЯ
-class Message(models.Model):
+class DataMessage(models.Model):
+    user_id = models.TextField()
+    guest_id = models.TextField()
+    room = models.TextField()
+
     my_message = models.TextField()
-    user_message = models.TextField()
-    room = models.CharField(max_length=255)
-    photo = models.ImageField(upload_to='chat/photos/%Y/%m/%d/', blank=True, null=True)
-    file = models.FileField(upload_to='chat/files/%Y/%m/%d/', blank=True, null=True)
-    voice_message = models.FileField(upload_to='chat/voice/%Y/%m/%d/', blank=True, null=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f"{self.sender.login}: {self.text[:30]}"
+    my_photo = models.ImageField(upload_to='chat/photos/%Y/%m/%d/', blank=True, null=True)
+    my_file = models.FileField(upload_to='chat/files/%Y/%m/%d/', blank=True, null=True)
+    my_voice_message = models.FileField(upload_to='chat/voice/%Y/%m/%d/', blank=True, null=True)
+    my_timestamp = models.DateTimeField(auto_now_add=True)
+
+    guest_message = models.TextField()
+    guest_photo = models.ImageField(upload_to='chat/photos/%Y/%m/%d/', blank=True, null=True)
+    guest_file = models.FileField(upload_to='chat/files/%Y/%m/%d/', blank=True, null=True)
+    guest_voice_message = models.FileField(upload_to='chat/voice/%Y/%m/%d/', blank=True, null=True)
+    guest_timestamp = models.DateTimeField(auto_now_add=True)
+

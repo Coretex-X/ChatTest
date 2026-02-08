@@ -37,7 +37,7 @@ print(response_login)'''
 ws = websocket.WebSocket()
 ws.connect("ws://127.0.0.1:5000/ws/data/")
 ws.send(json.dumps({
-    "room":"lobbi_3",
+    "room":"lobbi_2",
     "user_id":8,
     "guest_id":9,
     "status_chat":"existing_chat",

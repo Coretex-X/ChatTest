@@ -1,6 +1,6 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
-from .models import UserData
-from sign_up.models import Models
+from .models import UserData, DataMessage
+from datetime import datetime
 import json
 from redis.asyncio import Redis
 from redis.asyncio.connection import ConnectionPool
@@ -50,7 +50,7 @@ class DataConsumer(AsyncWebsocketConsumer):
                 await self.close(code=4001)
                 return
             elif room_exists == False:
-                await redis_client.setex(f"session:new_chat:1234", 300, json.dumps({
+                await redis_client.setex(f"session:new_chat:{token}", 300, json.dumps({
                     "room":room_chat,
                     "user_id":id_user,
                     "guest_id":guest_id,
@@ -62,7 +62,7 @@ class DataConsumer(AsyncWebsocketConsumer):
                 await self.close(code=4001)
                 return
             elif has_access == True:
-                await redis_client.setex(f"session:existing_chat:1234", 300, json.dumps({
+                await redis_client.setex(f"session:existing_chat:{token}", 300, json.dumps({
                     "room":room_chat,
                     "user_id":id_user,
                     "guest_id":guest_id,
@@ -95,7 +95,9 @@ class YourConsumer(AsyncWebsocketConsumer):
 #Для личных чатов пользователей (не мене 2 участников)
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        session_data = await redis_client.get(f"session:existing_chat:1234")
+        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
+        token_session = self.room_name
+        session_data = await redis_client.get(f"session:existing_chat:{token_session}")
         if session_data is None:
             await self.close()
             return
@@ -104,14 +106,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         token = data["token"]
 
         #Проверяем токен
-        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
         token_user = self.room_name
         if token != token_user:
             await self.close()
             return
         self.room_name = data["room"]
+        print(f"room_name: {self.room_name}, token: {token}")
 
-        await redis_client.delete(f"session:existing_chat:1234")
+        await redis_client.delete(f"session:existing_chat:{token_session}")
 
         self.room_group_name = f"chat_{self.room_name}"
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
@@ -153,8 +155,10 @@ class NewChatConsumer(AsyncWebsocketConsumer):
             return False
 
     async def connect(self):
+        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
+        token_session = self.room_name
         # 1. Получаем данные из Redis по ключу, который был установлен при connect в DataConsumer
-        session_data = await redis_client.get("session:new_chat:1234")  # используем тот же ключ, что и при сохранении
+        session_data = await redis_client.get(f"session:new_chat:{token_session}")  # используем тот же ключ, что и при сохранении
         # 2. Если нет данных - закрываем
         if session_data is None:
             await self.close()
@@ -164,7 +168,6 @@ class NewChatConsumer(AsyncWebsocketConsumer):
         token = data["token"]
 
         #Проверяем токен
-        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
         token_user = self.room_name
         if token != token_user:
             await self.close()
@@ -174,7 +177,7 @@ class NewChatConsumer(AsyncWebsocketConsumer):
         await self.add_chat(data["user_id"],data["guest_id"],data["room"])
         await self.add_chat(data["guest_id"],data["user_id"],data["room"])
        
-        await redis_client.delete("session:new_chat:1234")
+        await redis_client.delete(f"session:new_chat:{token_session}")
 
         self.room_group_name = f"chat_{self.room_name}"
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
