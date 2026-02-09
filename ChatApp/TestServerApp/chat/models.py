@@ -25,20 +25,14 @@ class UserData(models.Model):
 
 
 # 3. СООБЩЕНИЯ
+# Более оптимальная структура (рекомендую изменить):
 class DataMessage(models.Model):
-    user_id = models.TextField()
-    guest_id = models.TextField()
-    room = models.TextField()
-
-    my_message = models.TextField()
-    my_photo = models.ImageField(upload_to='chat/photos/%Y/%m/%d/', blank=True, null=True)
-    my_file = models.FileField(upload_to='chat/files/%Y/%m/%d/', blank=True, null=True)
-    my_voice_message = models.FileField(upload_to='chat/voice/%Y/%m/%d/', blank=True, null=True)
-    my_timestamp = models.DateTimeField(auto_now_add=True)
-
-    guest_message = models.TextField()
-    guest_photo = models.ImageField(upload_to='chat/photos/%Y/%m/%d/', blank=True, null=True)
-    guest_file = models.FileField(upload_to='chat/files/%Y/%m/%d/', blank=True, null=True)
-    guest_voice_message = models.FileField(upload_to='chat/voice/%Y/%m/%d/', blank=True, null=True)
-    guest_timestamp = models.DateTimeField(auto_now_add=True)
-
+    sender_id = models.TextField()  # ID отправителя
+    receiver_id = models.TextField()  # ID получателя
+    room = models.TextField()  # ID комнаты/чата
+    
+    message_text = models.TextField()
+    photo = models.ImageField(upload_to='chat/photos/%Y/%m/%d/', blank=True, null=True)
+    file = models.FileField(upload_to='chat/files/%Y/%m/%d/', blank=True, null=True)
+    voice_message = models.FileField(upload_to='chat/voice/%Y/%m/%d/', blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)

@@ -92,8 +92,30 @@ class YourConsumer(AsyncWebsocketConsumer):
         }))
 
 
-#Для личных чатов пользователей (не мене 2 участников)
+# Для личных чатов пользователей (не менее 2 участников)
 class ChatConsumer(AsyncWebsocketConsumer):
+    @sync_to_async
+    def save_message_to_db(self, user_id, guest_id, room, message_text, is_user_message=True):
+        try:
+            if is_user_message:
+                DataMessage.objects.create(
+                    sender_id=str(user_id),
+                    receiver_id=str(guest_id),
+                    room=str(room),
+                    message_text=message_text
+                )
+            else:
+                DataMessage.objects.create(
+                    sender_id=str(guest_id),    
+                    receiver_id=str(user_id),
+                    room=str(room),
+                    message_text=message_text
+                )
+            return True
+        except Exception as e:
+            print(f"Error saving message to DB: {e}")
+            return False
+
     async def connect(self):
         self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
         token_session = self.room_name
@@ -101,17 +123,20 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if session_data is None:
             await self.close()
             return
+        
         # 3. Разбираем JSON
         data = json.loads(session_data)
         token = data["token"]
 
-        #Проверяем токен
+        # Проверяем токен
         token_user = self.room_name
         if token != token_user:
             await self.close()
             return
+        
         self.room_name = data["room"]
-        print(f"room_name: {self.room_name}, token: {token}")
+        self.user_id = data["user_id"] 
+        self.guest_id = data["guest_id"]
 
         await redis_client.delete(f"session:existing_chat:{token_session}")
 
@@ -119,24 +144,28 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
-    async def disconnect(self, close_code):
-        #await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
-        pass
-
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
         message = text_data_json["message"]
+
+        await self.save_message_to_db(
+            user_id=self.user_id,
+            guest_id=self.guest_id,
+            room=self.room_name,
+            message_text=message,
+            is_user_message=True
+        )
+        
         await self.channel_layer.group_send(
             self.room_group_name, {"type": "chat.message", "message": message}
         )
-
     async def chat_message(self, event):
         message = event["message"]
         await self.send(text_data=json.dumps({"message": message}, ensure_ascii=False))
 
-
 #==============================================================================================================================================================================================
 #Чат для создание новых контактов пользователей
+# Чат для создание новых контактов пользователей
 class NewChatConsumer(AsyncWebsocketConsumer):
     @sync_to_async
     def add_chat(self, user_id, guest_id, room_id):
@@ -153,12 +182,36 @@ class NewChatConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             print(f"Error adding chat connection: {e}")
             return False
+    
+    @sync_to_async
+    def save_message_to_db(self, user_id, guest_id, room, message_text, is_user_message=True):
+        try:
+            if is_user_message:
+                # Сообщение от user_id (инициатора чата)
+                DataMessage.objects.create(
+                    sender_id=str(user_id),
+                    receiver_id=str(guest_id),
+                    room=str(room),
+                    message_text=message_text
+                )
+            else:
+                # Сообщение от guest_id (приглашенного пользователя)
+                DataMessage.objects.create(
+                    sender_id=str(guest_id),
+                    receiver_id=str(user_id),
+                    room=str(room),
+                    message_text=message_text
+                )
+            return True
+        except Exception as e:
+            print(f"Error saving message to DB in new chat: {e}")
+            return False
 
     async def connect(self):
         self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
         token_session = self.room_name
         # 1. Получаем данные из Redis по ключу, который был установлен при connect в DataConsumer
-        session_data = await redis_client.get(f"session:new_chat:{token_session}")  # используем тот же ключ, что и при сохранении
+        session_data = await redis_client.get(f"session:new_chat:{token_session}")
         # 2. Если нет данных - закрываем
         if session_data is None:
             await self.close()
@@ -167,16 +220,21 @@ class NewChatConsumer(AsyncWebsocketConsumer):
         data = json.loads(session_data)
         token = data["token"]
 
-        #Проверяем токен
+        # Проверяем токен
         token_user = self.room_name
         if token != token_user:
             await self.close()
             return
-        self.room_name = data["room"]
         
-        await self.add_chat(data["user_id"],data["guest_id"],data["room"])
-        await self.add_chat(data["guest_id"],data["user_id"],data["room"])
+        self.room_name = data["room"]
+        self.user_id = data["user_id"]      # Сохраняем user_id для сохранения сообщений
+        self.guest_id = data["guest_id"]    # Сохраняем guest_id для сохранения сообщений
+        
+        # Создаем записи о чате для обоих пользователей
+        await self.add_chat(data["user_id"], data["guest_id"], data["room"])
+        await self.add_chat(data["guest_id"], data["user_id"], data["room"])
        
+        # Удаляем временную сессию
         await redis_client.delete(f"session:new_chat:{token_session}")
 
         self.room_group_name = f"chat_{self.room_name}"
@@ -184,12 +242,24 @@ class NewChatConsumer(AsyncWebsocketConsumer):
         await self.accept()
 
     async def disconnect(self, close_code):
-        #await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+        # await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
         pass
 
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
         message = text_data_json["message"]
+        
+        # Сохраняем сообщение в БД
+        # В new_chat текущий пользователь - это user_id (инициатор)
+        await self.save_message_to_db(
+            user_id=self.user_id,
+            guest_id=self.guest_id,
+            room=self.room_name,
+            message_text=message,
+            is_user_message=True
+        )
+        
+        # Отправляем сообщение в группу
         await self.channel_layer.group_send(
             self.room_group_name, {"type": "chat.message", "message": message}
         )

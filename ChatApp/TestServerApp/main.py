@@ -6,6 +6,7 @@ import json
 import os
 from redis.asyncio import Redis
 from redis.asyncio.connection import ConnectionPool
+import threading
 
 '''json_reqistartion = {
     "login":"User5",
@@ -33,21 +34,52 @@ response_sesion = rq.post("http://127.0.0.1:5000/api/v2/user/sesion/", json=sesi
 
 print(response_login)'''
 
+# 1. Аутентификация
+ws_auth = websocket.WebSocket()
+ws_auth.connect("ws://127.0.0.1:5000/ws/data/")
+ws_auth.send(json.dumps({
+    "room": "lobbi_1",
+    "user_id": 3,
+    "guest_id": 4,
+    "status_chat": "new_chat",
+    "token": "api87"
+}))
 
+# Получаем ответ
+response = ws_auth.recv()
+print(f"Auth response: {response}")
+ws_auth.close()
+
+# 2. Подключаемся к чату
 ws = websocket.WebSocket()
-ws.connect("ws://127.0.0.1:5000/ws/data/")
-ws.send(json.dumps({
-    "room":"lobbi_2",
-    "user_id":8,
-    "guest_id":9,
-    "status_chat":"existing_chat",
-    "token":"api87"
-})) #existing
-ws.connect("ws://127.0.0.1:5000/ws/chat_user/api87/")
+ws.connect("ws://127.0.0.1:5000/ws/new_chat_user/api87/")
+print("Connected to chat!")
+
+# Функция для ПРОСЛУШИВАНИЯ сообщений (отдельный поток)
+def receive_messages():
+    while True:
+        try:
+            message = ws.recv()
+            print(f"\nReceived: {message}")
+        except Exception as e:
+            print(f"\nDisconnected: {e}")
+            break
+
+# Запускаем поток для прослушивания
+thread = threading.Thread(target=receive_messages, daemon=True)
+thread.start()
+
+# 3. Отправка сообщений (главный поток)
 while True:
-    message = str(input(": "))
+    message = input("Your message (or 'exit'): ")
+    if message.lower() == 'exit':
+        break
+    
+    # Отправляем сообщение
     ws.send(json.dumps({"message": message}))
-    print(ws.recv())  # {"message": "Hello"}
+    # НЕ вызываем ws.recv() здесь - это делает отдельный поток
+
+ws.close()
 
 
 
