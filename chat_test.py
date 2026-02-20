@@ -5,6 +5,9 @@ import shutil
 import json
 import time
 import base64
+import websocket
+import threading
+import queue
 
 # ===============================================
 # ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ДАННЫХ ПОЛЬЗОВАТЕЛЕЙ
@@ -19,30 +22,27 @@ import base64
 # Пример: "/home/user/photos/my_photo.jpg"
 # ============================================================
 
+id_user = 3
+guest_id = 4
+
 CURRENT_USER = {
-    "id": 1,
-    "name": "N",
-    "avatar_text": "N",
+    "id": id_user,
+    "name": "Я",  # ← Измени свое имя тут
     "avatar_color": ft.Colors.BLUE,
-    "avatar_path": "/home/archlinux05/Home/b50dd6b1ebc7e97c3e5fe2d9e85f9a7a.jpg",  # ← УКАЖИ ПУТЬ К СВОЕМУ ФОТО ЗДЕСЬ! Например: "/path/to/your_photo.jpg"
-    "avatar_base64": None,  # Фото в base64
-    "phone": "None",
-    "status": "None",
-    "about": "None"
+    "phone": "+7 900 123-45-67",
+    "status": "В сети",
+    "about": "Это я"
 }
 
 # Данные собеседника (с кем переписываемся)
 CONTACT_USER = {
-    "id": 2,
-    "name": "None",
-    "avatar_text": "N",
-    "avatar_color": ft.Colors.GREY,
-    "avatar_path": "/home/archlinux05/Home/422c80c1f7c8f7e0b5c7e2d9e85f9a7b.jpg",  # ← УКАЖИ ПУТЬ К ФОТО СОБЕСЕДНИКА ЗДЕСЬ! Например: "/path/to/friend_photo.jpg"
-    "avatar_base64": None,  # Фото в base64
-    "phone": "None",
-    "status": "None",
-    "about": "None",
-    "last_seen": "None"
+    "id": guest_id,
+    "name": "Друг",  # ← Измени имя собеседника тут
+    "avatar_color": ft.Colors.GREEN,
+    "phone": "+7 900 111-22-33",
+    "status": "В сети",
+    "about": "Мой друг",
+    "last_seen": "только что"
 }
 
 # Настройки чата
@@ -51,6 +51,58 @@ CHAT_CONFIG = {
     "theme": "light",
     "notifications": True
 }
+
+
+# ===============================================
+# WEBSOCKET КЛИЕНТ - ПОЛУЧЕНИЕ СООБЩЕНИЙ ОТ СОБЕСЕДНИКА
+# ===============================================
+
+
+message_queue = queue.Queue()
+ws = None
+running = True
+
+# 1. Аутентификация
+def authenticate():
+    ws_auth = websocket.WebSocket()
+    ws_auth.connect("ws://127.0.0.1:5000/ws/data/")
+    ws_auth.send(json.dumps({
+        "room": "lobbi_1",
+        "user_id": id_user,
+        "guest_id": guest_id,
+        "status_chat": "existing_chat",
+        "token": "api87"
+    }))
+    ws_auth.close()
+
+# Выполняем аутентификацию
+authenticate()
+
+# 2. Подключаемся к чату
+ws = websocket.WebSocket()
+ws.connect("ws://127.0.0.1:5000/ws/chat_user/api87/")
+
+# Функция для ПРОСЛУШИВАНИЯ сообщений (отдельный поток)
+def receive_messages():
+    """Получает сообщения от WebSocket и кладет их в очередь"""
+    global running
+    while running:
+        try:
+            message = ws.recv()
+            # Парсим JSON
+            message_data = json.loads(message)
+            print(f"Получено сообщение: sender={message_data.get('sender_id')}, text={message_data.get('message')}")
+            # Кладем в очередь для обработки в главном потоке
+            message_queue.put(message_data)
+        
+        except websocket.WebSocketConnectionClosedException:
+            break
+        except Exception as e:
+            break
+
+# Запускаем поток для прослушивания
+thread = threading.Thread(target=receive_messages, daemon=True)
+thread.start()
 
 def main(page: ft.Page):
     page.title = "WhatsApp-like Chat"
@@ -72,11 +124,6 @@ def main(page: ft.Page):
     settings_file = "chat_settings.json"
     auto_download_folder = None
     
-    # Папка для аватарок
-    avatars_folder = "avatars"
-    if not os.path.exists(avatars_folder):
-        os.makedirs(avatars_folder)
-    
     # Для записи голосовых сообщений
     voice_recordings_folder = "voice_recordings"
     if not os.path.exists(voice_recordings_folder):
@@ -90,41 +137,13 @@ def main(page: ft.Page):
                 with open(settings_file, 'r', encoding='utf-8') as f:
                     settings = json.load(f)
                     auto_download_folder = settings.get('auto_download_folder')
-                    
-                    # Загружаем пути к аватаркам если есть
-                    if 'current_user_avatar' in settings:
-                        CURRENT_USER['avatar_path'] = settings['current_user_avatar']
-                    
-                    if 'contact_user_avatar' in settings:
-                        CONTACT_USER['avatar_path'] = settings['contact_user_avatar']
         except:
             pass
-        
-        # Загружаем аватарки в base64 (из кода или из настроек)
-        if CURRENT_USER.get('avatar_path') and os.path.exists(CURRENT_USER['avatar_path']):
-            try:
-                with open(CURRENT_USER['avatar_path'], 'rb') as img_file:
-                    CURRENT_USER['avatar_base64'] = base64.b64encode(img_file.read()).decode()
-                print(f"✅ Загружена аватарка текущего пользователя")
-            except Exception as e:
-                print(f"❌ Ошибка загрузки аватарки текущего пользователя: {e}")
-        
-        if CONTACT_USER.get('avatar_path') and os.path.exists(CONTACT_USER['avatar_path']):
-            try:
-                with open(CONTACT_USER['avatar_path'], 'rb') as img_file:
-                    CONTACT_USER['avatar_base64'] = base64.b64encode(img_file.read()).decode()
-                print(f"✅ Загружена аватарка собеседника")
-            except Exception as e:
-                print(f"❌ Ошибка загрузки аватарки собеседника: {e}")
     
     # Сохранение настроек
     def save_settings():
         try:
             settings = {'auto_download_folder': auto_download_folder}
-            if CURRENT_USER['avatar_path']:
-                settings['current_user_avatar'] = CURRENT_USER['avatar_path']
-            if CONTACT_USER['avatar_path']:
-                settings['contact_user_avatar'] = CONTACT_USER['avatar_path']
             
             with open(settings_file, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, ensure_ascii=False)
@@ -139,124 +158,20 @@ def main(page: ft.Page):
     
     def create_avatar_widget(user_data, size=40, is_circle=True):
         """
-        Создает виджет аватара: либо фото, либо текст
-        
-        Args:
-            user_data: словарь с данными пользователя (CURRENT_USER или CONTACT_USER)
-            size: размер аватара
-            is_circle: круглая аватарка или квадратная
+        ПРОСТОЙ круг с первой буквой имени - БЕЗ ФОТО!
         """
-        # Если есть фото в base64, показываем его
-        if user_data.get('avatar_base64'):
-            avatar = ft.Container(
-                content=ft.Image(
-                    src_base64=user_data['avatar_base64'],
-                    fit=ft.ImageFit.COVER,
-                ),
-                width=size,
-                height=size,
-                border_radius=size//2 if is_circle else 10,
-                clip_behavior=ft.ClipBehavior.HARD_EDGE,
-            )
-        # Если есть путь к фото, но нет base64 (загружаем)
-        elif user_data.get('avatar_path') and os.path.exists(user_data['avatar_path']):
-            try:
-                with open(user_data['avatar_path'], 'rb') as img_file:
-                    user_data['avatar_base64'] = base64.b64encode(img_file.read()).decode()
-                
-                avatar = ft.Container(
-                    content=ft.Image(
-                        src_base64=user_data['avatar_base64'],
-                        fit=ft.ImageFit.COVER,
-                    ),
-                    width=size,
-                    height=size,
-                    border_radius=size//2 if is_circle else 10,
-                    clip_behavior=ft.ClipBehavior.HARD_EDGE,
-                )
-            except:
-                # Если не удалось загрузить фото, показываем текст
-                avatar = ft.CircleAvatar(
-                    content=ft.Text(user_data["avatar_text"], size=size//2),
-                    bgcolor=user_data["avatar_color"],
-                    radius=size//2,
-                )
-        else:
-            # Нет фото, показываем текст
-            avatar = ft.CircleAvatar(
-                content=ft.Text(user_data["avatar_text"], size=size//2),
-                bgcolor=user_data["avatar_color"],
-                radius=size//2,
-            )
+        # Берем первую букву имени
+        name = user_data.get("name", "?")
+        letter = name[0].upper() if name else "?"
         
-        return avatar
-    
-    def change_avatar(user_type):
-        """
-        Изменение аватарки пользователя
-        
-        Args:
-            user_type: "current" или "contact"
-        """
-        def on_avatar_picked(e: ft.FilePickerResultEvent):
-            if e.files and len(e.files) > 0:
-                file_path = e.files[0].path
-                file_name = e.files[0].name
-                
-                # Копируем файл в папку с аватарками
-                dest_path = os.path.join(avatars_folder, f"{user_type}_{file_name}")
-                shutil.copy2(file_path, dest_path)
-                
-                # Обновляем данные пользователя
-                if user_type == "current":
-                    CURRENT_USER['avatar_path'] = dest_path
-                    with open(dest_path, 'rb') as img_file:
-                        CURRENT_USER['avatar_base64'] = base64.b64encode(img_file.read()).decode()
-                else:
-                    CONTACT_USER['avatar_path'] = dest_path
-                    with open(dest_path, 'rb') as img_file:
-                        CONTACT_USER['avatar_base64'] = base64.b64encode(img_file.read()).decode()
-                
-                # Сохраняем настройки
-                save_settings()
-                
-                # Обновляем интерфейс
-                page.open(
-                    ft.SnackBar(content=ft.Text(f"✅ Аватарка обновлена!"), duration=2000)
-                )
-                
-                # Обновляем все аватарки в интерфейсе
-                update_all_avatars()
-        
-        avatar_picker = ft.FilePicker(on_result=on_avatar_picked)
-        page.overlay.append(avatar_picker)
-        page.update()
-        
-        avatar_picker.pick_files(
-            allow_multiple=False,
-            dialog_title="Выберите фото для аватарки",
-            allowed_extensions=["jpg", "jpeg", "png", "gif", "webp"]
+        # Просто круг с буквой
+        return ft.CircleAvatar(
+            content=ft.Text(letter, size=size//2),
+            bgcolor=user_data.get("avatar_color", ft.Colors.GREY),
+            radius=size//2,
         )
     
-    def update_all_avatars():
-        """Обновляет все аватарки в интерфейсе"""
-        # Пересоздаем шапку чата
-        nonlocal chat_header
-        chat_header = create_chat_header()
-        
-        # Обновляем все сообщения (пересоздаем аватарки)
-        for i, msg in enumerate(messages_column.controls[:]):
-            if hasattr(msg, 'content') and isinstance(msg.content, ft.Row):
-                # Находим аватар в сообщении и обновляем его
-                for control in msg.content.controls:
-                    if isinstance(control, ft.CircleAvatar) or (isinstance(control, ft.Container) and hasattr(control, 'content') and isinstance(control.content, ft.Image)):
-                        # Заменяем на новый аватар
-                        is_user = control in msg.content.controls[-1:] if len(msg.content.controls) > 2 else False
-                        new_avatar = create_avatar_widget(CURRENT_USER if is_user else CONTACT_USER)
-                        # TODO: сложная логика замены, для простоты пересоздадим сообщение
-                        pass
-        
-        page.update()
+    
     
     # ===============================================
     # ОСТАЛЬНЫЕ ФУНКЦИИ (auto_save_file, download_file и т.д.)
@@ -1332,13 +1247,20 @@ def main(page: ft.Page):
         )
     
     def send_message(e):
-        """Отправка текстового сообщения"""
         if message_input.value.strip():
-            # Создаем и добавляем сообщение
+            # Создаем и добавляем сообщение (свое)
             msg = create_chat_message(message=message_input.value, is_user=True)
             messages_column.controls.append(msg)
             all_messages.append(msg)
             
+            # Отправляем через WebSocket
+            try:
+                ws.send(json.dumps({"message": message_input.value}))
+            except Exception as e:
+                page.open(
+                    ft.SnackBar(content=ft.Text(f"❌ Ошибка отправки: {e}"), duration=3000)
+                )
+
             # Очищаем поле ввода
             message_input.value = ""
             message_input.update()
@@ -1359,96 +1281,114 @@ def main(page: ft.Page):
     # ===================================================================
     # Используй эти функции когда получаешь сообщения от собеседника!
     
-    def add_incoming_text_message(text):
+    def add_incoming_text_message(text, sender_id=None):
         """
-        Добавляет входящее текстовое сообщение (от собеседника)
+        Добавляет текстовое сообщение (определяет сторону по sender_id)
         
         Args:
             text: Текст сообщения
+            sender_id: ID отправителя (1=я, 2=собеседник)
             
         Пример:
-            add_incoming_text_message("Привет! Как дела?")
+            add_incoming_text_message("Привет!", sender_id=1)  # Мое (справа)
+            add_incoming_text_message("Привет!", sender_id=2)  # Чужое (слева)
         """
-        msg = create_chat_message(message=text, is_user=False)
+        # ОПРЕДЕЛЯЕМ ПО sender_id КТО ОТПРАВИЛ
+        is_user = (sender_id == CURRENT_USER["id"]) if sender_id is not None else False
+        
+        msg = create_chat_message(message=text, is_user=is_user)
         messages_column.controls.append(msg)
         all_messages.append(msg)
         messages_column.scroll_to(offset=-1, duration=300)
         page.update()
-        print(f"✅ Добавлено входящее текстовое сообщение от {CONTACT_USER['name']}: {text}")
+        
+        side = "СПРАВА (мое)" if is_user else "СЛЕВА (чужое)"
+        print(f"✅ Сообщение добавлено {side}, sender_id={sender_id}: {text}")
     
-    def add_incoming_image(image_path, file_name, one_time_view=False):
+    def add_incoming_image(image_path, file_name, sender_id=None, one_time_view=False):
         """
-        Добавляет входящее фото (от собеседника)
+        Добавляет фото (определяет сторону по sender_id)
         
         Args:
             image_path: Путь к изображению
             file_name: Имя файла
-            one_time_view: Одноразовый просмотр (True/False)
+            sender_id: ID отправителя
+            one_time_view: Одноразовый просмотр
             
         Пример:
-            add_incoming_image("/path/to/photo.jpg", "photo.jpg")
+            add_incoming_image("/path/photo.jpg", "photo.jpg", sender_id=2)  # Слева
         """
-        msg = create_image_message(image_path, file_name, is_user=False, one_time_view=one_time_view)
+        is_user = (sender_id == CURRENT_USER["id"]) if sender_id is not None else False
+        
+        msg = create_image_message(image_path, file_name, is_user=is_user, one_time_view=one_time_view)
         messages_column.controls.append(msg)
         all_messages.append(msg)
         messages_column.scroll_to(offset=-1, duration=300)
         page.update()
-        print(f"✅ Добавлено входящее фото от {CONTACT_USER['name']}: {file_name}")
+        
+        side = "СПРАВА" if is_user else "СЛЕВА"
+        print(f"✅ Фото добавлено {side}, sender_id={sender_id}: {file_name}")
     
-    def add_incoming_video(video_path, file_name):
+    def add_incoming_video(video_path, file_name, sender_id=None):
         """
-        Добавляет входящее видео (от собеседника)
+        Добавляет видео (определяет сторону по sender_id)
         
         Args:
             video_path: Путь к видео
             file_name: Имя файла
-            
-        Пример:
-            add_incoming_video("/path/to/video.mp4", "video.mp4")
+            sender_id: ID отправителя
         """
-        msg = create_video_message(video_path, file_name, is_user=False)
+        is_user = (sender_id == CURRENT_USER["id"]) if sender_id is not None else False
+        
+        msg = create_video_message(video_path, file_name, is_user=is_user)
         messages_column.controls.append(msg)
         all_messages.append(msg)
         messages_column.scroll_to(offset=-1, duration=300)
         page.update()
-        print(f"✅ Добавлено входящее видео от {CONTACT_USER['name']}: {file_name}")
+        
+        side = "СПРАВА" if is_user else "СЛЕВА"
+        print(f"✅ Видео добавлено {side}, sender_id={sender_id}: {file_name}")
     
-    def add_incoming_audio(audio_path, file_name):
+    def add_incoming_audio(audio_path, file_name, sender_id=None):
         """
-        Добавляет входящее аудио (от собеседника)
+        Добавляет аудио (определяет сторону по sender_id)
         
         Args:
             audio_path: Путь к аудио
             file_name: Имя файла
-            
-        Пример:
-            add_incoming_audio("/path/to/audio.mp3", "audio.mp3")
+            sender_id: ID отправителя
         """
-        msg = create_audio_message(audio_path, file_name, is_user=False)
+        is_user = (sender_id == CURRENT_USER["id"]) if sender_id is not None else False
+        
+        msg = create_audio_message(audio_path, file_name, is_user=is_user)
         messages_column.controls.append(msg)
         all_messages.append(msg)
         messages_column.scroll_to(offset=-1, duration=300)
         page.update()
-        print(f"✅ Добавлено входящее аудио от {CONTACT_USER['name']}: {file_name}")
+        
+        side = "СПРАВА" if is_user else "СЛЕВА"
+        print(f"✅ Аудио добавлено {side}, sender_id={sender_id}: {file_name}")
     
-    def add_incoming_document(file_path, file_name, file_type="Файл"):
+    def add_incoming_document(file_path, file_name, sender_id=None, file_type="Файл"):
         """
-        Добавляет входящий документ (от собеседника)
+        Добавляет документ (определяет сторону по sender_id)
         
         Args:
             file_path: Путь к файлу
             file_name: Имя файла
-            file_type: Тип файла (например, "PDF документ")
-            
-        Пример:
-            add_incoming_document("/path/to/doc.pdf", "📄 document.pdf", "PDF документ")
+            sender_id: ID отправителя
+            file_type: Тип файла
         """
-        msg = create_document_message(file_path, file_name, file_type, is_user=False)
+        is_user = (sender_id == CURRENT_USER["id"]) if sender_id is not None else False
+        
+        msg = create_document_message(file_path, file_name, file_type, is_user=is_user)
         messages_column.controls.append(msg)
         all_messages.append(msg)
         messages_column.scroll_to(offset=-1, duration=300)
         page.update()
-        print(f"✅ Добавлен входящий документ от {CONTACT_USER['name']}: {file_name}")
+        
+        side = "СПРАВА" if is_user else "СЛЕВА"
+        print(f"✅ Документ добавлен {side}, sender_id={sender_id}: {file_name}")
     
     # Сохраняем функции в page.data чтобы к ним можно было обращаться извне
     page.data = {
@@ -1496,10 +1436,6 @@ def main(page: ft.Page):
         def close_profile(e):
             page.close(profile_dialog)
         
-        def change_avatar_action(e):
-            page.close(profile_dialog)
-            change_avatar("contact")
-        
         def call_user(e):
             page.open(
                 ft.SnackBar(content=ft.Text("📞 Звонок..."), duration=2000)
@@ -1543,14 +1479,6 @@ def main(page: ft.Page):
                             content=big_avatar,
                             alignment=ft.alignment.center,
                             padding=20,
-                        ),
-                        
-                        # Кнопка изменения аватарки (маленькая иконка)
-                        ft.IconButton(
-                            icon=ft.Icons.EDIT,
-                            icon_size=20,
-                            on_click=change_avatar_action,
-                            tooltip="Изменить аватарку",
                         ),
                         
                         # Имя
@@ -1764,7 +1692,6 @@ def main(page: ft.Page):
                             alignment=ft.MainAxisAlignment.START,
                         ),
                         on_tap=show_user_profile,
-                        on_long_press_start=lambda e: change_avatar("contact"),  # Долгое нажатие для смены аватарки
                     ),
                     ft.Container(expand=True),
                     # Кнопка очистки чата
@@ -1773,13 +1700,6 @@ def main(page: ft.Page):
                         icon_color=ft.Colors.RED,
                         tooltip="Очистить весь чат",
                         on_click=lambda e: clear_all_chat(),
-                    ),
-                    # Кнопка для смены своей аватарки
-                    ft.IconButton(
-                        icon=ft.Icons.ACCOUNT_CIRCLE,
-                        icon_color=ft.Colors.BLUE,
-                        tooltip="Изменить свою аватарку",
-                        on_click=lambda e: change_avatar("current"),
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.START,
@@ -1930,6 +1850,7 @@ def main(page: ft.Page):
     )
 
     # Добавляем начальные сообщения с данными пользователей
+    # Добавляем начальные сообщения с данными пользователей
     initial_messages = [
         create_chat_message("Привет! Как дела?", is_user=False),
         create_chat_message("Привет! Все отлично, спасибо! А у тебя?", is_user=True),
@@ -1937,6 +1858,34 @@ def main(page: ft.Page):
     ]
     messages_column.controls.extend(initial_messages)
     all_messages.extend(initial_messages)
+
+    # 👇 ВОТ СЮДА ВСТАВЬ ЭТО
+    def check_messages():
+        try:
+            while not message_queue.empty():
+                msg = message_queue.get_nowait()
+                sender_id = msg.get("sender_id")
+                text = msg.get("message")
+                
+                if text:
+                    # ✅ ВАЖНО: Показываем только сообщения от ДРУГИХ (sender_id = 2)
+                    # Игнорируем свои сообщения (sender_id = 1), чтобы не было дублей
+                    if sender_id == CONTACT_USER["id"]:  # Если сообщение от друга
+                        msg_widget = create_chat_message(text, is_user=False)  # is_user=False = слева
+                        messages_column.controls.append(msg_widget)
+                        all_messages.append(msg_widget)
+                        messages_column.scroll_to(offset=-1, duration=300)
+                        page.update()
+                    else:
+                        print(f"⚠️ Получено сообщение от себя (sender_id={sender_id}), игнорируем: {text}")
+                        
+        except queue.Empty:
+            pass
+        threading.Timer(0.5, check_messages).start()
+
+    # Запускаем проверку
+    check_messages()
+    # 👆 ДО СЮДА
 
     # Основной контейнер чата
     chat_container = ft.Container(
