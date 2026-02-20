@@ -22,6 +22,11 @@ import queue
 # Пример: "/home/user/photos/my_photo.jpg"
 # ============================================================
 
+# Папка для входящих файлов
+INCOMING_FILES_FOLDER = "incoming_files1"
+if not os.path.exists(INCOMING_FILES_FOLDER):
+    os.makedirs(INCOMING_FILES_FOLDER)
+
 id_user = 3
 guest_id = 4
 
@@ -82,22 +87,58 @@ authenticate()
 ws = websocket.WebSocket()
 ws.connect("ws://127.0.0.1:5000/ws/chat_user/api87/")
 
-# Функция для ПРОСЛУШИВАНИЯ сообщений (отдельный поток)
 def receive_messages():
     """Получает сообщения от WebSocket и кладет их в очередь"""
     global running
     while running:
         try:
+            # Пытаемся получить сообщение (может быть текст или бинарные данные)
             message = ws.recv()
-            # Парсим JSON
-            message_data = json.loads(message)
-            print(f"Получено сообщение: sender={message_data.get('sender_id')}, text={message_data.get('message')}")
-            # Кладем в очередь для обработки в главном потоке
-            message_queue.put(message_data)
+            
+            # Пробуем распарсить как JSON (текстовое сообщение)
+            try:
+                message_data = json.loads(message)
+                print(f"📨 Получено текстовое сообщение: sender={message_data.get('sender_id')}, text={message_data.get('message')}")
+                message_queue.put(message_data)
+            except:
+                # Если не JSON, значит это бинарные данные (файл)
+                print(f"📦 Получены бинарные данные, размер: {len(message)} байт")
+                
+                # Ищем разделитель между метаданными и файлом
+                separator = b"|||BINARY_DATA|||"
+                separator_index = message.find(separator)
+                
+                if separator_index != -1:
+                    # Отделяем метаданные от файла
+                    metadata_bytes = message[:separator_index]
+                    file_data = message[separator_index + len(separator):]
+                    
+                    # Парсим метаданные
+                    metadata = json.loads(metadata_bytes.decode('utf-8'))
+                    
+                    print(f"📦 Метаданные файла: {metadata}")
+                    
+                    # Создаем сообщение для очереди
+                    file_message = {
+                        "type": "file",
+                        "file_name": metadata.get("file_name", "unknown"),
+                        "file_type": metadata.get("file_type", "unknown"),
+                        "file_size": metadata.get("file_size", len(file_data)),
+                        "file_data": base64.b64encode(file_data).decode('utf-8'),  # Кодируем в base64 для очереди
+                        "sender_id": metadata.get("sender_id", None)
+                    }
+                    
+                    message_queue.put(file_message)
+                else:
+                    print("❌ Не удалось найти разделитель в бинарных данных")
         
         except websocket.WebSocketConnectionClosedException:
+            print("⚠️ WebSocket соединение закрыто")
             break
         except Exception as e:
+            print(f"❌ Ошибка в receive_messages: {e}")
+            import traceback
+            traceback.print_exc()
             break
 
 # Запускаем поток для прослушивания
@@ -362,8 +403,22 @@ def main(page: ft.Page):
             ],
         )
         page.open(rename_dialog)
+
+            # FilePicker для выбора файлов - ВЫНЕСЕН НАВЕРХ!
+    def on_file_picked(e: ft.FilePickerResultEvent):
+            if e.files:
+                for file in e.files:
+                    file_info = {
+                        'path': file.path,
+                        'name': file.name,
+                        'display_name': file.name
+                    }
+                    # Показываем диалог переименования
+                    show_rename_dialog(file_info)
+        
+    file_picker = ft.FilePicker(on_result=on_file_picked)
+    page.overlay.append(file_picker)
     
-    # Добавление файла в чат
     def add_file_to_chat(file_info):
         file_path = file_info['path']
         display_name = file_info['display_name']
@@ -373,64 +428,40 @@ def main(page: ft.Page):
         # Автосохранение файла
         saved_path = auto_save_file(file_path, display_name)
         
+        # Определяем тип файла
+        file_type = "document"
+        if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+            file_type = "image"
+        elif file_ext in ['.mp4', '.avi', '.mov', '.mkv', '.webm']:
+            file_type = "video"
+        elif file_ext in ['.mp3', '.wav', '.ogg', '.m4a']:
+            file_type = "audio"
+        
+        # Отправляем файл через WebSocket
+        send_file_via_websocket(saved_path, display_name, file_type, one_time_view)
+        
+        # Создаем сообщение в чате (как и раньше)
         msg = None
         if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
             msg = create_image_message(saved_path, display_name, is_user=True, one_time_view=one_time_view)
         elif file_ext in ['.mp4', '.avi', '.mov', '.mkv', '.webm']:
             msg = create_video_message(saved_path, display_name, is_user=True)
         elif file_ext in ['.mp3', '.wav', '.ogg', '.m4a']:
-            msg = create_audio_message(saved_path, display_name, is_user=True)
-        elif file_ext in ['.pdf']:
-            msg = create_document_message(saved_path, f"📄 {display_name}", "PDF документ", is_user=True)
-        elif file_ext in ['.doc', '.docx']:
-            msg = create_document_message(saved_path, f"📝 {display_name}", "Word документ", is_user=True)
-        elif file_ext in ['.xls', '.xlsx']:
-            msg = create_document_message(saved_path, f"📊 {display_name}", "Excel таблица", is_user=True)
-        elif file_ext in ['.txt']:
-            msg = create_document_message(saved_path, f"📃 {display_name}", "Текстовый файл", is_user=True)
-        elif file_ext in ['.zip', '.rar', '.7z']:
-            msg = create_document_message(saved_path, f"🗜️ {display_name}", "Архив", is_user=True)
+            msg = create_audio_message(saved_path, display_name, is_user=True, one_time_view=one_time_view)
         else:
             msg = create_document_message(saved_path, f"📎 {display_name}", "Файл", is_user=True)
         
         if msg:
             messages_column.controls.append(msg)
             all_messages.append(msg)
-            # Добавляем в список отправленных медиа файлов
             sent_media_files.append({
                 'name': display_name,
                 'type': file_ext,
                 'path': saved_path
             })
-            print(f"📎 Добавлен файл в медиа: {display_name} (всего: {len(sent_media_files)})")
         
         messages_column.scroll_to(offset=-1, duration=300)
         page.update()
-        
-        # Уведомление об автосохранении
-        if auto_download_folder and saved_path != file_path:
-            page.open(
-                ft.SnackBar(
-                    content=ft.Text(f"✅ Файл сохранен в: {auto_download_folder}"),
-                    duration=3000
-                )
-            )
-            page.update()
-    
-    # FilePicker для выбора файлов
-    def on_file_picked(e: ft.FilePickerResultEvent):
-        if e.files:
-            for file in e.files:
-                file_info = {
-                    'path': file.path,
-                    'name': file.name,
-                    'display_name': file.name
-                }
-                # Показываем диалог переименования
-                show_rename_dialog(file_info)
-    
-    file_picker = ft.FilePicker(on_result=on_file_picked)
-    page.overlay.append(file_picker)
     
     def on_input_change(e):
         # Переключаем видимость кнопок в зависимости от содержимого поля
@@ -1248,24 +1279,29 @@ def main(page: ft.Page):
     
     def send_message(e):
         if message_input.value.strip():
-            # Создаем и добавляем сообщение (свое)
+            # Отправляем текстовое сообщение
+            msg_data = {
+                "type": "text",
+                "message": message_input.value,
+                "sender_id": CURRENT_USER["id"]
+            }
+            
+            # Создаем и добавляем сообщение в чат
             msg = create_chat_message(message=message_input.value, is_user=True)
             messages_column.controls.append(msg)
             all_messages.append(msg)
             
             # Отправляем через WebSocket
             try:
-                ws.send(json.dumps({"message": message_input.value}))
+                ws.send(json.dumps(msg_data))
             except Exception as e:
-                page.open(
-                    ft.SnackBar(content=ft.Text(f"❌ Ошибка отправки: {e}"), duration=3000)
-                )
-
+                page.open(ft.SnackBar(content=ft.Text(f"❌ Ошибка отправки: {e}"), duration=3000))
+            
             # Очищаем поле ввода
             message_input.value = ""
             message_input.update()
             
-            # Возвращаем кнопки микрофона и скрепки после отправки
+            # Возвращаем кнопки
             mic_button.visible = True
             attach_button.visible = True
             send_button.visible = False
@@ -1275,6 +1311,61 @@ def main(page: ft.Page):
             
             messages_column.scroll_to(offset=-1, duration=300)
             page.update()
+
+
+    def send_file_via_websocket(file_path, file_name, file_type, one_time_view=False):
+        """
+        Отправляет файл через WebSocket в формате, который ожидает сервер
+        file_type: 'image', 'video', 'audio', 'document'
+        """
+        try:
+            # Проверяем размер файла (лимит 50 МБ как на сервере)
+            file_size = os.path.getsize(file_path)
+            MAX_SIZE = 50 * 1024 * 1024  # 50 МБ
+            
+            if file_size > MAX_SIZE:
+                print(f"❌ Файл слишком большой: {file_size / 1024 / 1024:.1f} МБ (макс. 50 МБ)")
+                page.open(ft.SnackBar(
+                    content=ft.Text(f"❌ Файл слишком большой! Максимум 50 МБ"),
+                    duration=3000
+                ))
+                return False
+            
+            # Читаем файл
+            with open(file_path, 'rb') as f:
+                file_data = f.read()
+            
+            # Создаем метаданные в формате, который ожидает сервер
+            metadata = {
+                "file_name": file_name,
+                "file_type": file_type,  # сервер ожидает mime-type
+                "file_size": file_size
+            }
+            
+            # Конвертируем метаданные в JSON и потом в байты
+            metadata_bytes = json.dumps(metadata).encode('utf-8')
+            
+            # Разделитель (точно такой же как на сервере)
+            separator = b"|||BINARY_DATA|||"
+            
+            # Склеиваем: метаданные + разделитель + файл
+            message_bytes = metadata_bytes + separator + file_data
+            
+            print(f"📤 Отправка файла: {file_name} ({file_size / 1024:.1f} КБ)")
+            print(f"📤 Метаданные: {metadata}")
+            print(f"📤 Размер сообщения: {len(message_bytes) / 1024:.1f} КБ")
+            
+            # Отправляем как БИНАРНЫЕ данные (не JSON!)
+            ws.send_binary(message_bytes)
+            
+            print(f"✅ Файл отправлен: {file_name}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Ошибка отправки файла: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     # ===================================================================
     # ПУБЛИЧНЫЕ ФУНКЦИИ ДЛЯ WEBSOCKET - ДОБАВЛЕНИЕ ВХОДЯЩИХ СООБЩЕНИЙ
@@ -1859,33 +1950,85 @@ def main(page: ft.Page):
     messages_column.controls.extend(initial_messages)
     all_messages.extend(initial_messages)
 
-    # 👇 ВОТ СЮДА ВСТАВЬ ЭТО
     def check_messages():
-        try:
-            while not message_queue.empty():
-                msg = message_queue.get_nowait()
-                sender_id = msg.get("sender_id")
-                text = msg.get("message")
-                
-                if text:
-                    # ✅ ВАЖНО: Показываем только сообщения от ДРУГИХ (sender_id = 2)
-                    # Игнорируем свои сообщения (sender_id = 1), чтобы не было дублей
-                    if sender_id == CONTACT_USER["id"]:  # Если сообщение от друга
-                        msg_widget = create_chat_message(text, is_user=False)  # is_user=False = слева
-                        messages_column.controls.append(msg_widget)
-                        all_messages.append(msg_widget)
-                        messages_column.scroll_to(offset=-1, duration=300)
-                        page.update()
+            try:
+                while not message_queue.empty():
+                    msg = message_queue.get_nowait()
+                    
+                    # Проверяем тип сообщения
+                    if "type" in msg and msg["type"] == "file":
+                        # Это файл!
+                        handle_incoming_file(msg)
                     else:
-                        print(f"⚠️ Получено сообщение от себя (sender_id={sender_id}), игнорируем: {text}")
+                        # Это текстовое сообщение
+                        sender_id = msg.get("sender_id")
+                        text = msg.get("message")
                         
-        except queue.Empty:
-            pass
-        threading.Timer(0.5, check_messages).start()
+                        if text and sender_id == CONTACT_USER["id"]:
+                            msg_widget = create_chat_message(text, is_user=False)
+                            messages_column.controls.append(msg_widget)
+                            all_messages.append(msg_widget)
+                            messages_column.scroll_to(offset=-1, duration=300)
+                            page.update()
+                            print(f"📨 Получено сообщение от друга: {text}")
+                        
+            except queue.Empty:
+                pass
+            threading.Timer(0.5, check_messages).start()
 
-    # Запускаем проверку
+    def handle_incoming_file(file_msg):
+        """Обрабатывает входящий файл"""
+        try:
+            # Получаем данные файла
+            file_name = file_msg.get("file_name")
+            file_type = file_msg.get("file_type")
+            file_data_b64 = file_msg.get("file_data")
+            sender_id = file_msg.get("sender_id")
+            
+            print(f"📥 Обработка входящего файла: {file_name}")
+            print(f"📥 Тип: {file_type}, отправитель: {sender_id}")
+            
+            # Декодируем из base64
+            file_data = base64.b64decode(file_data_b64)
+            print(f"✅ Декодировано: {len(file_data) / 1024:.1f} КБ")
+            
+            # Сохраняем файл
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = f"{timestamp}_{file_name}"
+            file_path = os.path.join(INCOMING_FILES_FOLDER, safe_name)
+            
+            with open(file_path, 'wb') as f:
+                f.write(file_data)
+            
+            print(f"💾 Файл сохранен: {file_path}")
+            
+            # Показываем в чате (только если файл от друга!)
+            if sender_id == CONTACT_USER["id"]:
+                if file_type == "image" or file_name.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+                    msg_widget = create_image_message(file_path, file_name, is_user=False)
+                elif file_type == "video" or file_name.lower().endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm')):
+                    msg_widget = create_video_message(file_path, file_name, is_user=False)
+                elif file_type == "audio" or file_name.lower().endswith(('.mp3', '.wav', '.ogg', '.m4a')):
+                    msg_widget = create_audio_message(file_path, file_name, is_user=False)
+                else:
+                    msg_widget = create_document_message(file_path, f"📎 {file_name}", "Файл", is_user=False)
+                
+                messages_column.controls.append(msg_widget)
+                all_messages.append(msg_widget)
+                messages_column.scroll_to(offset=-1, duration=300)
+                page.update()
+                
+                print(f"📨 Файл от друга отображен в чате: {file_name}")
+            else:
+                print(f"⏭️ Файл от себя (sender_id={sender_id}), игнорируем")
+            
+        except Exception as e:
+            print(f"❌ Ошибка при получении файла: {e}")
+            import traceback
+            traceback.print_exc()
+
+    # Запускаем проверку сообщений (ТОЛЬКО ОДИН РАЗ!)
     check_messages()
-    # 👆 ДО СЮДА
 
     # Основной контейнер чата
     chat_container = ft.Container(
